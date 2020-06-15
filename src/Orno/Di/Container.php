@@ -1,10 +1,23 @@
-<?php namespace Orno\Di;
+<?php
+
+/**
+ * The Orno Component Library
+ *
+ * @author  Phil Bennett @philipobenito
+ * @license http://www.wtfpl.net/txt/copying/ WTFPL
+ */
+namespace Orno\Di;
 
 use Closure;
 use ArrayAccess;
 use ReflectionMethod;
 use ReflectionClass;
 
+/**
+ * Container
+ *
+ * A Dependency Injection Container.
+ */
 class Container implements ContainerInterface, ArrayAccess
 {
     /**
@@ -27,13 +40,6 @@ class Container implements ContainerInterface, ArrayAccess
      * @var array
      */
     protected $shared = [];
-
-    /**
-     * Should the container automatically resolve dependencies?
-     *
-     * @var boolean
-     */
-    protected $autoResolve = false;
 
     /**
      * Constructor
@@ -64,7 +70,9 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Set configuration for the container
+     * Set Config
+     *
+     * Provide configuration for the container instance
      *
      * @param  array     $config
      * @return Container $this
@@ -72,9 +80,11 @@ class Container implements ContainerInterface, ArrayAccess
     public function setConfig(array $config = [])
     {
         foreach ($config as $alias => $options) {
-            $shared = (array_key_exists('shared', $options)) ? (bool) $options['shared'] : false;
+            $shared = (array_key_exists('shared', $options)) ?: false;
 
             $object = (array_key_exists('object', $options)) ? $options['object'] : $alias;
+
+            $object = ($options instanceof Closure) ? $options : $alias;
 
             $object = $this->register($alias, $object, $shared);
 
@@ -91,15 +101,18 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Register
+     *
      * Register a class name, closure or fully configured item with the container,
      * we will handle dependencies at the time it is requested
      *
      * @param  string  $alias
      * @param  mixed   $object
      * @param  boolean $shared
+     * @param  boolean $auto
      * @return void
      */
-    public function register($alias, $object = null, $shared = false)
+    public function register($alias, $object = null, $shared = false, $auto = false)
     {
         // if $object is null we assume the $alias is a class name that
         // needs to be registered
@@ -108,12 +121,12 @@ class Container implements ContainerInterface, ArrayAccess
         }
 
         // do we want to store this object as a singleton?
-        $this->values[$alias]['shared'] = $shared === true ?: false;
+        $this->values[$alias]['shared'] = ($shared === true) ?: false;
 
         // if the $object is a string and $autoResolve is turned off we get a new
         // Definition instance to allow further configuration of our object
-        if (is_string($object) && $this->autoResolve === false) {
-            $object = new Definition($object, $this);
+        if (is_string($object)) {
+            $object = new Definition($object, $this, $auto);
         }
 
         // simply store whatever $object is in the container and resolve it
@@ -128,6 +141,8 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Registered
+     *
      * Check if an alias is registered with the container
      *
      * @param  string $key
@@ -139,6 +154,8 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Resolve
+     *
      * Resolve and return the requested item
      *
      * @param  string $alias
@@ -148,9 +165,13 @@ class Container implements ContainerInterface, ArrayAccess
     public function resolve($alias, array $args = [])
     {
         $object = null;
+        $closure = false;
+        $definition = false;
 
+        // if the requested item is not registered with the container already
+        // then we register it for easier resolution
         if (! array_key_exists($alias, $this->values)) {
-            $this->register($alias);
+            $this->register($alias, $alias, false, true);
         }
 
         // if the item is currently stored as a shared item we just return it
@@ -161,17 +182,13 @@ class Container implements ContainerInterface, ArrayAccess
         // if the item is a factory closure we call the function with args
         if ($this->values[$alias]['object'] instanceof Closure) {
             $object = call_user_func_array($this->values[$alias]['object'], $args);
+            $closure = true;
         }
 
         // if the item is an instance of Definition we invoke it
         if ($this->values[$alias]['object'] instanceof Definition) {
             $object = $this->values[$alias]['object']();
-        }
-
-        // if we've got this far and $autoResolve is turned on then we need to
-        // build the object and resolve it's dependencies
-        if ($this->autoResolve === true && is_null($object)) {
-            $object = $this->build($alias, $this->values[$alias]['object']);
+            $definition = true;
         }
 
         // do we need to save it as a shared item?
@@ -183,14 +200,14 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Takes the $object and instantiates it with all dependencies injected
-     * into it's constructor
+     * Build
      *
-     * @param  string $alias
+     * Builds an object and injects constructor arguments
+     *
      * @param  string $object
      * @return object
      */
-    public function build($alias, $object)
+    public function build($object)
     {
         $reflection = new ReflectionClass($object);
         $construct = $reflection->getConstructor();
@@ -210,6 +227,8 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * Dependencies
+     *
      * Recursively resolve dependencies, and dependencies of dependencies etc.. etc..
      * Will first check if the parameters type hint is instantiable and resolve that, if
      * not it will attempt to resolve an implementation from the param annotation
@@ -258,8 +277,10 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Accepts the name of an object in string form and returns an
-     * array of param matches from the constructor docComment
+     * Get Constructor Parameters
+     *
+     * Accepts an object in string or object form and returns an
+     * array of param matches from the constructor doc block
      *
      * @param  string $object
      * @return array|boolean
@@ -278,19 +299,9 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Sets the $autoResolve option
+     * ArrayAccess Get
      *
-     * @param  boolean   $auto
-     * @return Container $this
-     */
-    public function autoResolve($auto)
-    {
-        $this->autoResolve = (bool) $auto;
-        return $this;
-    }
-
-    /**
-     * Gets a value from the container
+     * Proxy to resolve method
      *
      * @param  string $key
      * @return mixed
@@ -301,7 +312,9 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Registers a value with the container
+     * ArrayAccess Set
+     *
+     * Proxy to register method
      *
      * @param  string $key
      * @param  mixed  $value
@@ -313,6 +326,8 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
+     * ArrayAccess Unset
+     *
      * Destroys an item in the container
      *
      * @param  string $key
@@ -324,13 +339,15 @@ class Container implements ContainerInterface, ArrayAccess
     }
 
     /**
-     * Checks if an item is set
+     * ArrayAccess Exists
+     *
+     * Proxy to registered method
      *
      * @param  string $key
      * @return boolean
      */
     public function offsetExists($key)
     {
-        return isset($this->values[$key]);
+        return $this->registered($key);
     }
 }

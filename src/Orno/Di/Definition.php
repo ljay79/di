@@ -1,8 +1,24 @@
-<?php namespace Orno\Di;
+<?php
+
+/**
+ * The Orno Component Library
+ *
+ * @author  Phil Bennett @philipobenito
+ * @license http://www.wtfpl.net/txt/copying/ WTFPL
+ */
+namespace Orno\Di;
 
 use ReflectionClass;
 use ReflectionMethod;
+use Orno\Di\ContainerInterface;
 
+/**
+ * Definition
+ *
+ * A definition of an item registered with the dependency injection container. Holds
+ * information regarding constructor injection and any method calls to be invoked
+ * before returning an instance of the item
+ */
 class Definition
 {
     use ContainerAwareTrait;
@@ -22,25 +38,37 @@ class Definition
     protected $arguments = [];
 
     /**
-     * Associative array of methods to call before returning the object
+     * Array of methods to call before returning the object
      *
      * @var array
      */
     protected $methods = [];
 
     /**
+     * Does the object need to be auto resolved?
+     *
+     * @var boolean
+     */
+    protected $auto;
+
+    /**
      * Constructor
      *
-     * @param string $class
+     * @param string                      $class
+     * @param \Orno\Di\ContainerInterface $container
+     * @param boolean                     $auto
      */
-    public function __construct($class = null, ContainerInterface $container)
+    public function __construct($class = null, ContainerInterface $container, $auto = false)
     {
         $this->class = $class;
         $this->container = $container;
+        $this->auto = $auto;
     }
 
     /**
-     * Configures and returns the class associated with this instance
+     * Magic Invoke
+     *
+     * Configure and returns the object associated with this definition
      *
      * @return object
      */
@@ -49,7 +77,9 @@ class Definition
         $object = null;
 
         if (! $this->hasClass()) {
-            throw new \RuntimeException('The definition has no class associated with it');
+            throw new \RuntimeException(
+                'The definition has no class associated with it'
+            );
         }
 
         $object = $this->handleConstructorInjection();
@@ -58,7 +88,9 @@ class Definition
     }
 
     /**
-     * Handles any arguments to be injected into the container
+     * Handle Constructor Injection
+     *
+     * Instantiates the object with any constructor arguments injected
      *
      * @return object
      */
@@ -66,11 +98,10 @@ class Definition
     {
         if ($this->hasArguments()) {
             $reflectionClass = new ReflectionClass($this->class);
-
             $arguments = [];
 
             foreach ($this->arguments as $arg) {
-                if (is_string($arg) && $this->container->registered($arg)) {
+                if (is_string($arg) && (class_exists($arg) || $this->container->registered($arg))) {
                     $arguments[] = $this->container->resolve($arg);
                     continue;
                 }
@@ -79,14 +110,20 @@ class Definition
 
             $object = $reflectionClass->newInstanceArgs($arguments);
         } else {
-            $object = new $this->class;
+            if ($this->auto === false) {
+                $object = new $this->class;
+            } else {
+                $object = $this->container->build($this->class);
+            }
         }
 
         return $object;
     }
 
     /**
-     * Calls all methods that are configured on the object with injected arguments
+     * Handle Method Calls
+     *
+     * Invokes all methods that are associated with the definition
      *
      * @param  object $object
      * @return object
@@ -94,17 +131,23 @@ class Definition
     public function handleMethodCalls($object)
     {
         if ($this->hasMethodCalls()) {
-            foreach ($this->methods as $method => $args) {
-                $reflectionMethod = new ReflectionMethod($object, $method);
+            foreach ($this->methods as $method) {
+                $reflectionMethod = new ReflectionMethod($object, $method['method']);
 
                 $methodArgs = [];
 
-                foreach ((array) $args as $arg) {
+                foreach ((array) $method['arguments'] as $arg => $params) {
                     if (is_string($arg) && $this->container->registered($arg)) {
-                        $methodArgs[] = $this->container->resolve($arg);
+                        $methodArgs[] = $this->container->resolve($arg, (array) $params);
                         continue;
                     }
-                    $methodArgs[] = $arg;
+
+                    if (is_integer($arg) && is_string($params) && $this->container->registered($params)) {
+                        $methodArgs[] = $this->container->resolve($params);
+                        continue;
+                    }
+
+                    $methodArgs[] = $params;
                 }
 
                 $reflectionMethod->invokeArgs($object, $methodArgs);
@@ -115,7 +158,9 @@ class Definition
     }
 
     /**
-     * Checks if this Definition has a class associated with it
+     * Has Class?
+     *
+     * Checks if the definition has a class associated with it
      *
      * @return boolean
      */
@@ -125,10 +170,12 @@ class Definition
     }
 
     /**
-     * Sets a constructor argument for this instance
+     * With Argument
      *
-     * @param  mixed      $argument
-     * @return Definition $this
+     * Sets a constructor argument for the definition
+     *
+     * @param  mixed $argument
+     * @return \Orno\Di\Definition
      */
     public function withArgument($argument)
     {
@@ -138,10 +185,12 @@ class Definition
     }
 
     /**
-     * Proxy to withArgument() method, accepts array of arguments
+     * With Arguments
      *
-     * @param  array      $arguments
-     * @return Definition $this
+     * Proxy to withArgument method, accepts an array of arguments
+     *
+     * @param  array $arguments
+     * @return \Orno\Di\Definition
      */
     public function withArguments(array $arguments)
     {
@@ -153,7 +202,9 @@ class Definition
     }
 
     /**
-     * Checks if this Definition has arguments to inject
+     * Has Arguments?
+     *
+     * Checks if the definition has registered constructor arguments to inject
      *
      * @return boolean
      */
@@ -163,24 +214,31 @@ class Definition
     }
 
     /**
-     * Adds a method call to this instance
+     * With Method Call
      *
-     * @param  string     $method
-     * @param  array      $arguments
-     * @return Definition $this
+     * Sets a method call for the definition
+     *
+     * @param  string $method
+     * @param  array  $arguments
+     * @return \Orno\Di\Definition
      */
     public function withMethodCall($method, array $arguments = [])
     {
-        $this->methods[$method] = $arguments;
+        $this->methods[] = [
+            'method' => $method,
+            'arguments' =>$arguments
+        ];
 
         return $this;
     }
 
     /**
-     * Proxy to withMethodCall() method, accepts array of method calls
+     * With Method Calls
      *
-     * @param  array      $methods
-     * @return Definition $this
+     * Proxy to withMethodCall method, accepts array of method calls with method arguments
+     *
+     * @param  array $methods
+     * @return \Orno\Di\Definition
      */
     public function withMethodCalls(array $methods = [])
     {
@@ -192,7 +250,9 @@ class Definition
     }
 
     /**
-     * Checks if this definition has methods to call
+     * Has Method Calls?
+     *
+     * Checks if this definition has any registered methods to invoke
      *
      * @return boolean
      */
