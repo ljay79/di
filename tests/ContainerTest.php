@@ -181,54 +181,28 @@ class ContainerTest extends \PHPUnit_Framework_TestCase
 
     public function testReflectionOnNonClassThrowsException()
     {
-<<<<<<< HEAD
         $this->setExpectedException('Orno\Di\Exception\ReflectionException');
 
         (new Container)->get('FakeClass');
-=======
-        $container = new Container;
-        $container['test'] = function() { return 'Hello World'; };
-        $this->assertTrue(isset($container['test']));
-        $this->assertSame($container['test'], 'Hello World');
-        unset($container['test']);
-        $this->assertFalse(isset($container['test']));
->>>>>>> master
     }
 
     public function testReflectionOnClassWithNoConstructorCreatesDefinition()
     {
-<<<<<<< HEAD
         $c = new Container;
 
         $this->assertInstanceOf('OrnoTest\Assets\Baz', $c->get('OrnoTest\Assets\Baz'));
-=======
-        $container = new Container;
-        $this->assertTrue($container->resolve('Assets\OrnoTest\Baz') instanceof Baz);
->>>>>>> master
     }
 
     public function testReflectionInjectsDefaultValue()
     {
-<<<<<<< HEAD
         $c = new Container;
 
         $this->assertSame('Phil Bennett', $c->get('OrnoTest\Assets\FooWithDefaultArg')->name);
-=======
-        $container = new Container;
-        $container->register('Assets\OrnoTest\Bar');
-        $container->register('Assets\OrnoTest\Baz');
-        $this->assertTrue($container->resolve('Assets\OrnoTest\Foo') instanceof Foo);
->>>>>>> master
     }
 
     public function testReflectionThrowsExceptionForArgumentWithNoDefaultValue()
     {
-<<<<<<< HEAD
         $this->setExpectedException('Orno\Di\Exception\UnresolvableDependencyException');
-=======
-        $container = new Container;
-        $container->register('Baz', 'Assets\OrnoTest\Baz', true);
->>>>>>> master
 
         $c = new Container;
 
@@ -275,7 +249,6 @@ class ContainerTest extends \PHPUnit_Framework_TestCase
 
     public function testContainerGetsFromCacheWhenAvailableAndEnabled()
     {
-<<<<<<< HEAD
         $cache = $this->getMockBuilder('Orno\Cache\Cache')
                       ->setMethods(['get', 'set'])
                       ->disableOriginalConstructor()
@@ -295,9 +268,6 @@ class ContainerTest extends \PHPUnit_Framework_TestCase
               ->method('get')
               ->with($this->equalTo('orno::container::OrnoTest\Assets\Baz'))
               ->will($this->returnValue($definition));
-=======
-        $container = new Container;
->>>>>>> master
 
         $c = new Container($cache);
 
@@ -306,11 +276,7 @@ class ContainerTest extends \PHPUnit_Framework_TestCase
 
     public function testArrayAccessMapsToCorrectMethods()
     {
-<<<<<<< HEAD
         $c = new Container;
-=======
-        $container = new Container;
->>>>>>> master
 
         $c['OrnoTest\Assets\Baz'] = 'OrnoTest\Assets\Baz';
 
@@ -399,13 +365,9 @@ class ContainerTest extends \PHPUnit_Framework_TestCase
 
     public function testExtendReturnsDefinitionForModificationWhenCalledWithAValidService()
     {
-<<<<<<< HEAD
         $c = new Container;
         $definition = $c->add('service', 'OrnoTest\Assets\Baz');
         $extend = $c->extend('service');
-=======
-        $container = new Container;
->>>>>>> master
 
         $this->assertInstanceOf('Orno\Di\Definition\DefinitionInterface', $extend);
         $this->assertSame($definition, $extend);
