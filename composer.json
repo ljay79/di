@@ -21,11 +21,11 @@
     ],
     "autoload": {
         "files": [
-            "tests/assets/functions.php"
+            "tests/Assets/functions.php"
         ],
         "psr-4": {
             "Orno\\Di\\": "src/",
-            "OrnoTest\\Assets\\": "tests/assets"
+            "OrnoTest\\Assets\\": "tests/Assets"
         }
     }
 }
